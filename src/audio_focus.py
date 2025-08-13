@@ -21,6 +21,29 @@ def play_spotify(bus):
         #Spotify may not be running
         print(f"[SeamlessAudio] Could not resume Spotify: {e}")
 
+def update_active_others(active_others):
+        sink_inputs = subprocess.check_output(["pactl", "list", "sink-inputs"], text=True)
+        running_sinks = set()
+        current_id = None
+        is_playing = True
+        is_spotify = False
+
+        for line in sink_inputs.splitlines():
+            line = line.strip()
+            if line.startswith("Sink Input #"):
+                current_id = int(line.split('#')[1])
+                is_playing = True
+                is_spotify = False
+            elif "Corked" in line:
+                is_playing = ("no" in line.lower())
+            elif "application.name" in line and "spotify" in line.lower():
+                is_spotify = True
+            elif current_id is not None:
+                if not is_spotify and is_playing:
+                    running_sinks.add(current_id)
+                current_id = None
+        active_others.intersection_update(running_sinks) #Remove streams that are no longer running
+
 #Listen to PulseAudio events
 def main():
     bus = SessionBus()
@@ -31,25 +54,24 @@ def main():
     for line in proc.stdout:
       if "sink-input" in line:
         sink_id = int(line.split('#')[1])
-        
+    
         if "new" in line:
-          try:
-              sink_inputs = subprocess.check_output(["pactl", "list", "sink-inputs"], text=True)
-          except Exception as e: 
-              print(f"[SeamlessAudio] Could not access audio inputs: {e}")
-          
-          if 'application.name = "Spotify"' not in sink_inputs:
               #Add new stream
               active_others.add(sink_id)
-              pause_spotify(bus)
-              time.sleep(0.05)  
+              pause_spotify(bus)  
           
         elif "remove" in line:
             #Remove ended stream
             active_others.discard(sink_id)
-            if not active_others:
-                play_spotify(bus)
-                time.sleep(0.05)
+          
+      #Update active streams
+      update_active_others(active_others) 
+      time.sleep(0.15)
+    
+      #Resume spotify if nothing is active
+      if not active_others:
+          play_spotify(bus)
+                   
       
 if __name__ == "__main__":
     main()
