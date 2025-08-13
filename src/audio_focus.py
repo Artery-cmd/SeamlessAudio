@@ -130,7 +130,7 @@ def main():
     except Exception as e:
         print(f"[SeamlessAudio] Unexpected error: {e}")
     finally:
-        if 'proc' is not None():
+        if proc is not None():
             proc.terminate()
 
 if __name__ == "__main__":
