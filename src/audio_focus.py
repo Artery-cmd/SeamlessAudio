@@ -1,5 +1,6 @@
 import subprocess
 from pydbus import SessionBus
+import time
 
 
 def pause_spotify(bus):
@@ -27,7 +28,7 @@ def main():
     proc = subprocess.Popen(["pactl", "subscribe"], stdout=subprocess.PIPE, text=True) #Holds list of processes
     print("[SeamlessAudio] Listening for new audio streams...")
 
-  for line in proc.stdout:
+    for line in proc.stdout:
       if "sink-input" in line:
         sink_id = int(line.split('#')[1])
         
@@ -38,15 +39,17 @@ def main():
               print(f"[SeamlessAudio] Could not access audio inputs: {e}")
           
           if 'application.name = "Spotify"' not in sink_inputs:
+              #Add new stream
               active_others.add(sink_id)
               pause_spotify(bus)
+              time.sleep(0.05)  
           
         elif "remove" in line:
             #Remove ended stream
             active_others.discard(sink_id)
             if not active_others:
                 play_spotify(bus)
+                time.sleep(0.05)
       
-
 if __name__ == "__main__":
     main()
