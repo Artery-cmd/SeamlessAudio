@@ -4,24 +4,49 @@ from pydbus import SessionBus
 
 def pause_spotify(bus):
   try: 
-    spotify = bus.get("org.mpris.MediaPlayer2.spotify", "/org/mpris/MediaPlayer2")
-    spotify.Pause()
-    print("[SeamlessAudio] Paused Spotify")
+      spotify = bus.get("org.mpris.MediaPlayer2.spotify", "/org/mpris/MediaPlayer2")
+      spotify.Pause()
+      print("[SeamlessAudio] Paused Spotify")
   except Exception as e: 
-    #Spotify may not be running
-    print(f"[SeamlessAudio] Could not pause Spotify: {e}")
+      #Spotify may not be running
+      print(f"[SeamlessAudio] Could not pause Spotify: {e}")
+    
+def play_spotify(bus):
+    try:
+        spotify = bus.get("org.mpris.MediaPlayer2.spotify", "/org/mpris/MediaPlayer2")
+        spotify.Play()
+        print("[SeamlessAudio] Resumed Spotify")
+    except Exception as e:
+        #Spotify may not be running
+        print(f"[SeamlessAudio] Could not resume Spotify: {e}")
 
 #Listen to PulseAudio events
 def main():
-  bus = SessionBus()
-  proc = subprocess.Popen(["pactl", "subscribe"], stdout=subprocess.PIPE, text=True) #Holds list of processes
-  print("[SeamlessAudio] Listening for new audio streams...")
+    bus = SessionBus()
+    active_others = set()
+    proc = subprocess.Popen(["pactl", "subscribe"], stdout=subprocess.PIPE, text=True) #Holds list of processes
+    print("[SeamlessAudio] Listening for new audio streams...")
 
   for line in proc.stdout:
-    if "new" in line and "sink-input" in line:
-      sink_inputs = subprocess.check_output(["pactl", "list", "sink-inputs"], text=True)
-      if "application.name = \"Spotify\"" in sink_inputs:
-        pause_spotify(bus)
+      if "sink-input" in line:
+        sink_id = int(line.split('#')[1])
+        
+        if "new" in line:
+          try:
+              sink_inputs = subprocess.check_output(["pactl", "list", "sink-inputs"], text=True)
+          except Exception as e: 
+              print(f"[SeamlessAudio] Could not access audio inputs: {e}")
+          
+          if 'application.name = "Spotify"' not in sink_inputs:
+              active_others.add(sink_id)
+              pause_spotify(bus)
+          
+        elif "remove" in line:
+            #Remove ended stream
+            active_others.discard(sink_id)
+            if not active_others:
+                play_spotify(bus)
+      
 
 if __name__ == "__main__":
     main()
